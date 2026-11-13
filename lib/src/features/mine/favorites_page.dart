@@ -31,7 +31,10 @@ class _FavoritesPageState extends State<FavoritesPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    // _load 读取 AppScope（InheritedWidget），initState 内同步调用会抛异常。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   Future<void> _load() async {

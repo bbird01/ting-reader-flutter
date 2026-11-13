@@ -48,13 +48,17 @@ class _PersonalizationPageState extends State<PersonalizationPage> {
   bool _pluginToolMenuEnabled = true;
   bool _bookshelfProgressEnabled = true;
   String _widgetEmbedType = 'private';
+  String _desktopCloseBehavior = 'exit';
   String _applicationTimeZone = defaultApplicationTimeZone;
   bool _timeZoneSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    // _load 读取 AppScope（InheritedWidget），initState 内同步调用会抛异常。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   @override
@@ -115,6 +119,12 @@ class _PersonalizationPageState extends State<PersonalizationPage> {
       'bookshelf_progress_enabled',
       nested: nested,
       fallback: true,
+    );
+    _desktopCloseBehavior = _stringValue(
+      data,
+      'desktop_close_behavior',
+      nested: nested,
+      fallback: 'exit',
     );
     final widgetCss = _stringValue(
       data,
@@ -404,6 +414,16 @@ class _PersonalizationPageState extends State<PersonalizationPage> {
                 _saveAudioFocusSettings(ignoreAudioFocus: value);
               },
             ),
+            if (platform == TargetPlatform.windows) ...[
+              const SizedBox(height: 24),
+              _DesktopSection(
+                closeBehavior: _desktopCloseBehavior,
+                onCloseBehavior: (value) {
+                  setState(() => _desktopCloseBehavior = value);
+                  _saveSettings({'desktop_close_behavior': value});
+                },
+              ),
+            ],
             if (appState.isAdmin && !isMobilePlatform) ...[
               const SizedBox(height: 24),
               _WidgetSection(

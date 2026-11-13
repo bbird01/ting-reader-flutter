@@ -20,7 +20,10 @@ class _FolderPickerDialogState extends State<_FolderPickerDialog> {
   @override
   void initState() {
     super.initState();
-    _loadRoots();
+    // _loadRoots 读取 AppScope（InheritedWidget），initState 内同步调用会抛异常。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadRoots();
+    });
   }
 
   Future<void> _loadRoots() async {

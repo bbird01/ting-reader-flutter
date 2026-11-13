@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 import 'l10n/app_localizations.dart';
 import 'src/core/services/desktop_window.dart';
+import 'src/core/services/windows_smtc_service.dart';
 import 'src/features/player/desktop_window_host.dart';
 import 'src/features/player/mini_player.dart';
 import 'src/features/login_page.dart';
@@ -28,6 +31,8 @@ Future<void> main() async {
   final appState = AppState();
   final downloadState = DownloadState(appState);
   final playerState = PlayerState(appState, downloadState);
+  final smtcService = WindowsSmtcService(playerState);
+  unawaited(smtcService.start());
   await DesktopWindow.instance.initialize(appState);
   DesktopWindow.instance.onExitRequested = () async {
     try {

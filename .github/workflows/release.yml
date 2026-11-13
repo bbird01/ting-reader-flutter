@@ -154,6 +154,10 @@ jobs:
           name: flutter-lockfile
           path: .
       - run: flutter pub get --enforce-lockfile
+      # smtc_windows 通过 cargokit 在构建时编译 Rust，缺工具链会导致 Windows 构建失败。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
       - shell: pwsh
         env:
           CMAKE_GENERATOR: Visual Studio 17 2022

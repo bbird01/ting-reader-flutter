@@ -45,6 +45,7 @@ dependencies:
   just_audio_media_kit: ^2.0.6
   media_kit_libs_linux: ^1.2.1
   media_kit_libs_windows_audio: ^1.0.9
+  smtc_windows: ^1.1.0
   file_picker: ^10.3.7
   just_audio_background:
     path: third_party/just_audio_background
@@ -79,6 +80,11 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^2.0.0
+
+# smtc_windows 的 Dart 绑定由 flutter_rust_bridge 2.11.1 生成，其 Rust 侧也钉死
+# =2.11.1。运行时被解析到更高版本时 RustLib.init() 会抛 StateError，SMTC 静默失效。
+dependency_overrides:
+  flutter_rust_bridge: 2.11.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

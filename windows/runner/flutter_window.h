@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "tray_icon.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
@@ -26,10 +27,13 @@ class FlutterWindow : public Win32Window {
 
  private:
   void SetMiniMode(bool enabled);
+  void HideToTray();
+  void RestoreFromTray();
   bool mini_mode_ = false;
   std::string close_behavior_ = "exit";
   WINDOWPLACEMENT normal_placement_{sizeof(WINDOWPLACEMENT)};
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> window_channel_;
+  std::unique_ptr<TrayIcon> tray_;
   // The project to run.
   flutter::DartProject project_;
 

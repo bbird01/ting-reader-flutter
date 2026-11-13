@@ -52,7 +52,11 @@ bool FlutterWindow::OnCreate() {
           if (!value) { result->Error("arguments", "关闭行为无效"); return; }
           close_behavior_ = *value;
         } else if (method == "minimize") {
-          ShowWindow(GetHandle(), SW_MINIMIZE);
+          if (close_behavior_ == "tray") {
+            HideToTray();
+          } else {
+            ShowWindow(GetHandle(), SW_MINIMIZE);
+          }
         } else if (method == "close") {
           PostMessage(GetHandle(), WM_CLOSE, 0, 0);
         } else if (method == "startDragging") {
@@ -75,6 +79,15 @@ bool FlutterWindow::OnCreate() {
         result->Success();
       });
 
+  tray_ = std::make_unique<TrayIcon>(
+      window, [this]() { RestoreFromTray(); },
+      [this]() {
+        // 交给 Dart 的 requestExit()，保留退出前的进度上报。
+        if (window_channel_) {
+          window_channel_->InvokeMethod("exitRequested", nullptr);
+        }
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -88,6 +101,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  tray_.reset();
   window_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -100,6 +114,14 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  if (tray_ && tray_->HandleMessage(message, lparam)) {
+    return 0;
+  }
+  if (message == WM_SYSCOMMAND && (wparam & 0xFFF0) == SC_MINIMIZE &&
+      close_behavior_ == "tray") {
+    HideToTray();
+    return 0;
+  }
   if (message == WM_SYSCOMMAND && (wparam & 0xFFF0) == SC_MAXIMIZE && mini_mode_) {
     SetMiniMode(false);
   }
@@ -125,6 +147,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     return 0;
   }
   if (message == WM_CLOSE) {
+    if (close_behavior_ == "tray") {
+      HideToTray();
+      return 0;
+    }
     if (close_behavior_ == "minimize") {
       ShowWindow(hwnd, SW_MINIMIZE);
       return 0;
@@ -174,4 +200,17 @@ void FlutterWindow::SetMiniMode(bool enabled) {
     window_channel_->InvokeMethod("miniModeChanged",
         std::make_unique<flutter::EncodableValue>(enabled));
   }
+}
+
+void FlutterWindow::HideToTray() {
+  // 图标添加失败时不能隐藏窗口，否则用户再也找不回界面。
+  if (!tray_ || !tray_->Show()) return;
+  ShowWindow(GetHandle(), SW_HIDE);
+}
+
+void FlutterWindow::RestoreFromTray() {
+  if (tray_) tray_->Hide();
+  const HWND window = GetHandle();
+  ShowWindow(window, IsZoomed(window) ? SW_SHOW : SW_RESTORE);
+  SetForegroundWindow(window);
 }

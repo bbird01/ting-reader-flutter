@@ -276,6 +276,78 @@ class _ApplicationTimeZoneSettingRow extends StatelessWidget {
   }
 }
 
+class _DesktopSection extends StatelessWidget {
+  const _DesktopSection({
+    required this.closeBehavior,
+    required this.onCloseBehavior,
+  });
+
+  final String closeBehavior;
+  final ValueChanged<String> onCloseBehavior;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = ['exit', 'minimize', 'tray'].contains(closeBehavior)
+        ? closeBehavior
+        : 'exit';
+    final dropdown = DropdownButtonFormField<String>(
+      initialValue: selected,
+      isExpanded: true,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.desktop_windows_rounded, size: 19),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: context.faintBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: context.faintBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.primary600, width: 1.5),
+        ),
+      ),
+      items: [
+        DropdownMenuItem(
+          value: 'exit',
+          child: Text(context.localeText('退出程序', 'Exit app')),
+        ),
+        DropdownMenuItem(
+          value: 'minimize',
+          child: Text(
+              context.localeText('最小化到任务栏', 'Minimize to taskbar')),
+        ),
+        DropdownMenuItem(
+          value: 'tray',
+          child: Text(context.localeText('最小化到托盘', 'Minimize to tray')),
+        ),
+      ],
+      onChanged: (next) {
+        if (next != null) onCloseBehavior(next);
+      },
+    );
+    return _SettingsSection(
+      icon: Icons.desktop_windows_rounded,
+      iconColor: Colors.blueGrey,
+      title: context.localeText('桌面窗口', 'Desktop window'),
+      child: _SettingsSelectRow(
+        icon: Icons.close_rounded,
+        iconColor: Colors.blueGrey,
+        title: context.localeText('关闭主窗口时', 'When closing the main window'),
+        description: context.localeText(
+          '选择托盘后，关闭或最小化会隐藏到通知区域，播放和系统媒体控制继续可用；双击托盘图标或右键菜单可还原。',
+          'With tray, closing or minimizing hides the window to the notification area while playback and system media controls keep working. Double-click the tray icon or use its menu to restore.',
+        ),
+        dropdown: dropdown,
+      ),
+    );
+  }
+}
+
 class _HomeLayoutSection extends StatelessWidget {
   const _HomeLayoutSection({
     required this.value,

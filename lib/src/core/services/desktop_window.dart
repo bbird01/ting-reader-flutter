@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../models/models.dart';
 import '../state/app_state.dart';
 
 class DesktopWindow extends ChangeNotifier {
@@ -31,6 +32,7 @@ class DesktopWindow extends ChangeNotifier {
     _app = app;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'closeRequested') await onCloseRequested?.call();
+      if (call.method == 'exitRequested') await requestExit();
       if (call.method == 'maximizedChanged') {
         if (call.arguments == true && isMini) await setMini(false);
         final value = call.arguments == true;
@@ -48,8 +50,12 @@ class DesktopWindow extends ChangeNotifier {
       }
     });
     void sync() {
-      final value = app.settings['desktop_close_behavior']?.toString();
-      final next = ['exit', 'minimize'].contains(value) ? value! : 'exit';
+      // 服务端把客户端自定义键放在 settings_json 里，顶层只保留白名单字段。
+      final value = (app.settings['desktop_close_behavior'] ??
+              asMap(app.settings['settings_json'])['desktop_close_behavior'])
+          ?.toString();
+      final next =
+          ['exit', 'minimize', 'tray'].contains(value) ? value! : 'exit';
       if (_initialized && next == closeBehavior) return;
       _initialized = true;
       closeBehavior = next;
