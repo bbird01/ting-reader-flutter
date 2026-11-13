@@ -1,7 +1,8 @@
 # Ting Reader Flutter
 
 Ting Reader Flutter 是听悦的跨平台客户端，用于连接 Ting Reader 服务端，提供书架、书单、下载、本地离线播放和沉浸式播放体验。
-此为fork原作者项目：https://github.com/dqsq2e2/ting-reader-flutter，在1.4.5基础上修改了WINDOWS媒体会话（SMTC）和最小化托盘功能。
+此为fork原作者项目：https://github.com/dqsq2e2/ting-reader-flutter
+在1.4.5基础上修改了WINDOWS媒体会话（SMTC）和最小化托盘功能。
 ## 平台能力
 
 | 平台 | 播放 | 后台/系统媒体控制 | 本地下载 | 说明 |
