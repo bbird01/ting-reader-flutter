@@ -22,10 +22,13 @@ import 'download_state.dart';
 import 'gateway_media_guard.dart';
 import 'books_state.dart';
 import 'player/playback_sleep.dart';
+import '../services/desktop_window.dart';
 
 part 'player/player_progress.dart';
 part 'player/player_focus.dart';
 part 'player/player_playback.dart';
+part 'player/player_auto_resume.dart';
+part 'player/player_output_route.dart';
 part 'player/player_gateway.dart';
 part 'player/player_source.dart';
 
@@ -43,6 +46,26 @@ class PlayerState extends ChangeNotifier with WidgetsBindingObserver {
     // focus loss (which does not). Audio-session activation is also requested
     // by just_audio_background at its lowest play entry point so notification
     // and headset controls cannot accidentally resume without audio focus.
+    _createAudioPlayer();
+    if (!kIsWeb) {
+      audio_background.JustAudioBackground.setBeforePlayHandler(
+          _prepareBackgroundPlayback);
+      audio_background.JustAudioBackground.setSeekHandler(
+        (position) => seek(position.inMilliseconds / 1000),
+      );
+      audio_background.JustAudioBackground.setChapterNavigationHandlers(
+        onNext: nextChapter,
+        onPrevious: previousChapter,
+        hasNext: () => _canMoveChapter(1),
+        hasPrevious: () => _canMoveChapter(-1),
+      );
+      audio_background.JustAudioBackground.setAudioFocusEnabled(true);
+    }
+    _audioSessionReady = _initializeAudioSession();
+    _startOutputRouteWatch();
+  }
+
+  void _createAudioPlayer() {
     _audio = audio.AudioPlayer(
       handleInterruptions: false,
       handleAudioSessionActivation: false,
@@ -107,33 +130,28 @@ class PlayerState extends ChangeNotifier with WidgetsBindingObserver {
     _indexSub = _audio.currentIndexStream.listen(_syncChapterFromAudioIndex);
     _errorSub = _audio.playbackEventStream
         .listen((_) {}, onError: _handleNativePlaybackError);
-    if (!kIsWeb) {
-      audio_background.JustAudioBackground.setBeforePlayHandler(
-          _prepareBackgroundPlayback);
-      audio_background.JustAudioBackground.setSeekHandler(
-        (position) => seek(position.inMilliseconds / 1000),
-      );
-      audio_background.JustAudioBackground.setChapterNavigationHandlers(
-        onNext: nextChapter,
-        onPrevious: previousChapter,
-        hasNext: () => _canMoveChapter(1),
-        hasPrevious: () => _canMoveChapter(-1),
-      );
-      audio_background.JustAudioBackground.setAudioFocusEnabled(true);
-    }
-    _audioSessionReady = _initializeAudioSession();
   }
 
   final AppState appState;
   final DownloadState downloadState;
   final Stream<audio_session.AudioInterruptionEvent>? _interruptionEvents;
-  late final audio.AudioPlayer _audio;
+  late audio.AudioPlayer _audio;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<bool>? _playingSub;
   StreamSubscription<audio.PlayerState>? _completeSub;
   StreamSubscription<int?>? _indexSub;
   StreamSubscription<audio.PlaybackEvent>? _errorSub;
+  Timer? _outputRouteTimer;
+  ({String id, String name, int formFactor, String enumerator})?
+      _lastOutputInfo;
+  // 因耳机断开被动暂停时置位；耳机重连且用户未手动干预时自动续播。
+  bool _resumeWhenOutputReturns = false;
+  bool _outputRouteChecking = false;
+  bool _outputRoutePending = false;
+  bool _outputRouteChanging = false;
+  // 上轮因正在起播等原因未能重建时置位，下一轮用当前播放状态重试。
+  bool _outputRebindRetry = false;
   StreamSubscription<audio_session.AudioInterruptionEvent>? _interruptionSub;
   StreamSubscription<void>? _noisySub;
   StreamSubscription<audio_session.AudioDevicesChangedEvent>?
@@ -202,6 +220,7 @@ class PlayerState extends ChangeNotifier with WidgetsBindingObserver {
   ({int play, int seek})? _completedPlaybackOperation;
   bool _gatewayReauthenticationPending = false;
   bool _resumeAfterGatewayReauthentication = false;
+  bool _autoResumeAttempted = false;
   int _mediaAuthRevision = -1;
   double _furthestChapterPosition = 0;
   // 睡眠定时按集数：集数用完时阻止 playChapter 的 _playWithSession 自动起播，
@@ -333,10 +352,12 @@ class PlayerState extends ChangeNotifier with WidgetsBindingObserver {
       Book book, List<Chapter> chapterList, Chapter chapter,
       {double? startAt}) {
     _lastRecoveredQueueChapterId = null;
+    _resumeWhenOutputReturns = false;
     return _playChapter(book, chapterList, chapter, startAt: startAt);
   }
 
   Future<void> togglePlay() => _togglePlayback();
+  Future<void> autoResumeLastSession() => _autoResumeLastSession();
   Future<void> pause() => _pausePlayback();
   Future<void> seek(double seconds) => _seekPlayback(seconds);
   Future<void> nextChapter({bool fromOutro = false}) =>
@@ -488,6 +509,7 @@ class PlayerState extends ChangeNotifier with WidgetsBindingObserver {
     }
     WidgetsBinding.instance.removeObserver(this);
     _stopProgressTimers();
+    _outputRouteTimer?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();

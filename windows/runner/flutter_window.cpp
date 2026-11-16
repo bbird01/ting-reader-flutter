@@ -1,10 +1,95 @@
 #include "flutter_window.h"
 
+#include <combaseapi.h>
+#include <mmdeviceapi.h>
+#include <propsys.h>
+#include <propvarutil.h>
+
 #include <optional>
 #include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "utils.h"
 #include "window_tasks.h"
+
+namespace {
+
+// PKEY_Device_FriendlyName / PKEY_AudioEndpoint_FormFactor 只在本模块使用，
+// SDK 未提供导入库定义，这里直接给出常量避免额外链接依赖。
+const PROPERTYKEY kDeviceFriendlyNameKey = {
+    {0xa45c254e, 0xdf1c, 0x4efd,
+     {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}},
+    14};
+const PROPERTYKEY kAudioEndpointFormFactorKey = {
+    {0x1da5d803, 0xd492, 0x4edd,
+     {0x8c, 0x23, 0xe0, 0xc0, 0xff, 0xee, 0x7f, 0x0e}},
+    0};
+const PROPERTYKEY kDeviceEnumeratorNameKey = {
+    {0xa45c254e, 0xdf1c, 0x4efd,
+     {0x80, 0x20, 0x67, 0xd1, 0x46, 0xa8, 0x50, 0xe0}},
+    24};
+
+// 返回当前默认播放设备的端点信息，用于跟踪音频输出路由。
+flutter::EncodableMap DefaultRenderOutputInfo() {
+  flutter::EncodableMap info;
+  IMMDeviceEnumerator* enumerator = nullptr;
+  if (FAILED(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                              IID_PPV_ARGS(&enumerator)))) {
+    return info;
+  }
+  IMMDevice* device = nullptr;
+  if (SUCCEEDED(
+          enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device)) &&
+      device != nullptr) {
+    std::string id;
+    LPWSTR wide_id = nullptr;
+    if (SUCCEEDED(device->GetId(&wide_id)) && wide_id != nullptr) {
+      id = Utf8FromUtf16(wide_id);
+      CoTaskMemFree(wide_id);
+    }
+    std::string name;
+    std::string device_enumerator;
+    int form_factor = 0;
+    IPropertyStore* properties = nullptr;
+    if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, &properties)) &&
+        properties != nullptr) {
+      PROPVARIANT value;
+      PropVariantInit(&value);
+      if (SUCCEEDED(
+              properties->GetValue(kDeviceFriendlyNameKey, &value)) &&
+          value.vt == VT_LPWSTR && value.pwszVal != nullptr) {
+        name = Utf8FromUtf16(value.pwszVal);
+      }
+      PropVariantClear(&value);
+      PropVariantInit(&value);
+      if (SUCCEEDED(
+              properties->GetValue(kAudioEndpointFormFactorKey, &value)) &&
+          value.vt == VT_UI4) {
+        form_factor = static_cast<int>(value.uintVal);
+      }
+      PropVariantClear(&value);
+      PropVariantInit(&value);
+      if (SUCCEEDED(
+              properties->GetValue(kDeviceEnumeratorNameKey, &value)) &&
+          value.vt == VT_LPWSTR && value.pwszVal != nullptr) {
+        device_enumerator = Utf8FromUtf16(value.pwszVal);
+      }
+      PropVariantClear(&value);
+      properties->Release();
+    }
+    info[flutter::EncodableValue("id")] = flutter::EncodableValue(id);
+    info[flutter::EncodableValue("name")] = flutter::EncodableValue(name);
+    info[flutter::EncodableValue("formFactor")] =
+        flutter::EncodableValue(form_factor);
+    info[flutter::EncodableValue("enumerator")] =
+        flutter::EncodableValue(device_enumerator);
+    device->Release();
+  }
+  enumerator->Release();
+  return info;
+}
+
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -68,6 +153,10 @@ bool FlutterWindow::OnCreate() {
           if (mini_mode_) SetMiniMode(false);
           ShowWindow(GetHandle(), maximize ? SW_MAXIMIZE : SW_RESTORE);
           result->Success(flutter::EncodableValue(IsZoomed(GetHandle()) != FALSE));
+          return;
+        } else if (method == "defaultAudioOutput") {
+          result->Success(
+              flutter::EncodableValue(DefaultRenderOutputInfo()));
           return;
         } else if (method == "exit") {
           close_behavior_ = "exit";

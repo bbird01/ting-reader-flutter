@@ -212,6 +212,7 @@ extension _PlayerPlayback on PlayerState {
 
   Future<void> _togglePlayback() async {
     if (!hasChapter) return;
+    _resumeWhenOutputReturns = false;
     if (_connectingPlayback && error == null) return;
     if (_gatewayReauthenticationPending) {
       _resumeAfterGatewayReauthentication = false;
@@ -244,6 +245,7 @@ extension _PlayerPlayback on PlayerState {
   /// 仅暂停播放，不会在未播放时触发播放。用于睡眠定时等需要确定性地暂停的场景。
   Future<void> _pausePlayback() async {
     if (!hasChapter) return;
+    _resumeWhenOutputReturns = false;
     if (_gatewayReauthenticationPending) {
       _resumeAfterGatewayReauthentication = false;
     }

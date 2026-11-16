@@ -188,6 +188,9 @@ class _StartupGateState extends State<StartupGate> {
         // Downloads are recoverable local state; keep the app bootable.
       }
       appState.startSessionMonitoring();
+      if (appState.isAuthenticated) {
+        unawaited(playerState.autoResumeLastSession());
+      }
     } catch (_) {
       if (!_cancelled) {
         await appState.resetToLoginAfterStartupFailure();

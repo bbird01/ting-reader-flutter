@@ -89,6 +89,32 @@ class DesktopWindow extends ChangeNotifier {
   Future<void> close() => _channel.invokeMethod<void>('close');
   Future<void> startDragging() => _channel.invokeMethod<void>('startDragging');
 
+  Future<
+      ({
+        String id,
+        String name,
+        int formFactor,
+        String enumerator,
+      })?> audioOutputInfo() async {
+    if (!supported || defaultTargetPlatform != TargetPlatform.windows) {
+      return null;
+    }
+    try {
+      final map =
+          await _channel.invokeMapMethod<String, dynamic>('defaultAudioOutput');
+      final id = map?['id']?.toString() ?? '';
+      if (id.isEmpty) return null;
+      return (
+        id: id,
+        name: map?['name']?.toString() ?? '',
+        formFactor: (map?['formFactor'] as num?)?.toInt() ?? 0,
+        enumerator: map?['enumerator']?.toString() ?? '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> toggleMaximize() async {
     final wasMini = isMini;
     if (wasMini) await setMini(false);
